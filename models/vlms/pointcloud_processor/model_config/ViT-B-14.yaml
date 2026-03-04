@@ -1,0 +1,34 @@
+model:
+  name: GfvlaEnvDinov2
+  backbone:
+    img_size: 518
+    patch_size: 14
+    embed_dim: 768
+    depth: 12
+    num_heads: 12
+    mlp_ratio: 4
+    num_register_tokens: 0
+    block_chunks: 0
+    init_values: 1.0
+    num_register_tokens: 0
+    interpolate_antialias: False  
+    interpolate_offset: 0.1
+  transformer:
+    img_size: 518
+    patch_size: 14
+    trans_dim: 768
+    depth: 12
+    drop_path_rate: 0.1
+    cls_dim: 40
+    group_size: 32
+    num_group: 64
+    encoder_dims: 768
+    adapter_dim: 16
+    drop_rate_adapter: 0.1
+    patchknn: 64
+    trans: -1.4
+    num_heads: 12
+    r: 3
+    ckpt_dir: '/share/gcy/gfvla_env_diffusion/gfvla_env/models/dinov2/ckpt'
+    base_ckpt_path: 'dinov2_vitb14_pretrain.pth'
+    mae_ckpt_path: 'dinov2_mae_encoder-19.pth'

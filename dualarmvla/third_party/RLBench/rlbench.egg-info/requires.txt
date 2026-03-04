@@ -1,0 +1,12 @@
+pyrep@ git+https://github.com/stepjam/PyRep.git
+numpy
+Pillow
+pyquaternion
+scipy
+natsort
+
+[dev]
+pytest
+
+[gym]
+gymnasium==1.0.0a2

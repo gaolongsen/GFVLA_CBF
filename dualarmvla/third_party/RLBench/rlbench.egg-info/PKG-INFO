@@ -1,0 +1,25 @@
+Metadata-Version: 2.4
+Name: rlbench
+Version: 1.2.0
+Summary: RLBench
+Home-page: https://www.doc.ic.ac.uk/~slj12
+Author: Stephen James
+Author-email: longsengao@gmail.com
+License-File: LICENSE
+Requires-Dist: pyrep@ git+https://github.com/stepjam/PyRep.git
+Requires-Dist: numpy
+Requires-Dist: Pillow
+Requires-Dist: pyquaternion
+Requires-Dist: scipy
+Requires-Dist: natsort
+Provides-Extra: gym
+Requires-Dist: gymnasium==1.0.0a2; extra == "gym"
+Provides-Extra: dev
+Requires-Dist: pytest; extra == "dev"
+Dynamic: author
+Dynamic: author-email
+Dynamic: home-page
+Dynamic: license-file
+Dynamic: provides-extra
+Dynamic: requires-dist
+Dynamic: summary

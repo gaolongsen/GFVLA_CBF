@@ -1,0 +1,7 @@
+exp/
+test_toy.sh
+test_infer.sh
+scripts/test_toy.py
+scripts/test_infer.py
+train_private.sh
+test_rlbench_private.sh

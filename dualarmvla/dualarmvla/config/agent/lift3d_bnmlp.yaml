@@ -1,0 +1,8 @@
+name: Lift3d_BatchNormMLP
+instantiate_config:
+  _target_: dualarmvla.models.PointCloudGuidedBatchNormMLP
+  point_cloud_encoder:
+    _target_: dualarmvla.models.dualarmvla.model_loader.lift3d_clip_base
+  policy_hidden_dims: [256, 256, 256]
+  nonlinearity: relu
+  dropout_rate: 0.0
