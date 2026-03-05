@@ -17,6 +17,13 @@ from .safety import SafetyMonitor
 from .config import HardwareConfig
 from .vision import BlockDetector, CameraInterface, BlockPose
 from .vla_integration import VLAHardwareController
+from .cbf import (
+    ControlBarrierFunctionFilter,
+    CBFConfig,
+    Obstacle,
+    obstacles_from_point_cloud,
+    obstacles_from_blocks,
+)
 
 __all__ = [
     'DualArmHardwareInterface',
@@ -30,5 +37,10 @@ __all__ = [
     'CameraInterface',
     'BlockPose',
     'VLAHardwareController',
+    'ControlBarrierFunctionFilter',
+    'CBFConfig',
+    'Obstacle',
+    'obstacles_from_point_cloud',
+    'obstacles_from_blocks',
 ]
 

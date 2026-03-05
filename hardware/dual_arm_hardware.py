@@ -22,6 +22,7 @@ from .robotiq_gripper import RobotiqGripper
 from .barrett_hand import BarrettHand
 from .safety import SafetyMonitor, SafetyLimits
 from .config import HardwareConfig
+from .cbf import ControlBarrierFunctionFilter, CBFConfig, Obstacle
 
 logger = logging.getLogger(__name__)
 
@@ -86,6 +87,23 @@ class DualArmHardwareInterface:
             collision_threshold=self.config.safety.collision_threshold,
         )
         self.safety = SafetyMonitor(limits=safety_limits)
+        
+        # Initialize CBF filter for obstacle avoidance (if enabled)
+        self._use_cbf = getattr(self.config.safety, 'use_cbf_filter', True)
+        if self._use_cbf:
+            ws = self.config.safety.workspace_limits or {}
+            left_ws = ws.get('left', {})
+            right_ws = ws.get('right', {})
+            cbf_config = CBFConfig(
+                obstacle_safety_margin=getattr(self.config.safety, 'cbf_obstacle_margin', 0.08),
+                inter_arm_safety_margin=getattr(self.config.safety, 'cbf_inter_arm_margin', 0.12),
+                workspace_x=left_ws.get('x', (0.0, 0.8)),
+                workspace_y=left_ws.get('y', (-0.5, 0.5)),
+                workspace_z=left_ws.get('z', (0.0, 0.6)),
+            )
+            self.cbf_filter = ControlBarrierFunctionFilter(config=cbf_config)
+        else:
+            self.cbf_filter = None
         
         self.connected = False
     
@@ -188,11 +206,23 @@ class DualArmHardwareInterface:
             'right_gripper': np.array([right_gripper]),
         }
     
+    def set_cbf_obstacles(self, obstacles: list):
+        """
+        Update obstacles for CBF filter (e.g., from vision/point cloud).
+        
+        Args:
+            obstacles: List of Obstacle objects
+        """
+        if self.cbf_filter is not None:
+            self.cbf_filter.set_obstacles(obstacles)
+    
     def execute_action(
         self,
         action: np.ndarray,
         blocking: bool = True,
         check_safety: bool = True,
+        use_cbf: Optional[bool] = None,
+        obstacles: Optional[list] = None,
     ) -> Tuple[bool, Optional[str]]:
         """
         Execute dual-arm action.
@@ -205,6 +235,8 @@ class DualArmHardwareInterface:
                 - [13]: Barrett Hand gripper (0=closed, 1=open)
             blocking: Whether to wait for movement completion
             check_safety: Whether to perform safety checks
+            use_cbf: Whether to apply CBF filter (default: config setting)
+            obstacles: Optional obstacles for CBF (updates filter if provided)
         
         Returns:
             Tuple of (success, error_message)
@@ -218,6 +250,23 @@ class DualArmHardwareInterface:
         # Check emergency stop
         if self.safety.emergency_stop:
             return False, "Emergency stop is active"
+        
+        # Apply CBF filter for obstacle avoidance
+        apply_cbf = use_cbf if use_cbf is not None else self._use_cbf
+        if apply_cbf and self.cbf_filter is not None:
+            if obstacles is not None:
+                self.cbf_filter.set_obstacles(obstacles)
+            try:
+                obs = self.get_observation() if self.connected else {}
+                current_state = {
+                    'left_arm_pose': obs.get('left_arm_pose'),
+                    'right_arm_pose': obs.get('right_arm_pose'),
+                }
+            except Exception:
+                current_state = None
+            action, cbf_ok, cbf_err = self.cbf_filter.filter_action(action, current_state)
+            if not cbf_ok and cbf_err:
+                logger.warning(f"CBF filter: {cbf_err}")
         
         # Split action
         action_left = action[:7]  # [x, y, z, roll, pitch, yaw, gripper]

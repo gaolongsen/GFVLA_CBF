@@ -19,6 +19,7 @@ sys.path.insert(0, project_root)
 
 from hardware import DualArmHardwareInterface, CameraInterface, BlockDetector
 from hardware.vision import BlockPose
+from hardware.cbf import obstacles_from_point_cloud, obstacles_from_blocks, Obstacle
 
 logger = logging.getLogger(__name__)
 
@@ -326,14 +327,16 @@ class VLAHardwareController:
         action: np.ndarray,
         observation: Dict[str, Any],
         apply_relative: bool = True,
+        use_cbf: bool = True,
     ) -> Tuple[bool, Optional[str]]:
         """
         Execute predicted action on hardware.
         
         Args:
             action: Predicted action [action_dim]
-            observation: Current observation (for relative positioning)
+            observation: Current observation (for relative positioning and obstacles)
             apply_relative: Whether to apply action relative to current state
+            use_cbf: Whether to apply CBF filter for obstacle avoidance (default: True)
         
         Returns:
             Tuple of (success, error_message)
@@ -361,8 +364,28 @@ class VLAHardwareController:
                     if len(robot_state) >= 7:
                         action[:3] += robot_state[:3]
         
-        # Execute action on hardware
-        success, error = self.hardware.execute_action(action, blocking=True)
+        # Build obstacles for CBF from observation (point cloud or detected blocks)
+        obstacles = None
+        if use_cbf and hasattr(self.hardware, 'cbf_filter') and self.hardware.cbf_filter is not None:
+            point_cloud = observation.get('point_cloud')
+            blocks = observation.get('blocks')  # Optional: BlockPose list from vision
+            if point_cloud is not None and len(point_cloud) > 0:
+                obstacles = obstacles_from_point_cloud(
+                    point_cloud,
+                    safety_margin=0.05,
+                    voxel_size=0.03,
+                    max_obstacles=15,
+                )
+            elif blocks is not None and len(blocks) > 0:
+                obstacles = obstacles_from_blocks(blocks, safety_margin=0.05)
+        
+        # Execute action on hardware (CBF filter applied inside if enabled)
+        success, error = self.hardware.execute_action(
+            action,
+            blocking=True,
+            use_cbf=use_cbf,
+            obstacles=obstacles,
+        )
         
         return success, error
     

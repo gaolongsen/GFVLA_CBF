@@ -67,6 +67,10 @@ class SafetyConfig:
     emergency_stop_enabled: bool = True
     joint_velocity_limits: Optional[np.ndarray] = None
     collision_threshold: float = 0.05  # m (minimum distance between arms)
+    # CBF (Control Barrier Function) settings for obstacle avoidance
+    use_cbf_filter: bool = True
+    cbf_obstacle_margin: float = 0.08  # m
+    cbf_inter_arm_margin: float = 0.12  # m
 
 
 @dataclass
@@ -90,4 +94,10 @@ class HardwareConfig:
             self.barrett = BarrettHandConfig()
         if self.safety is None:
             self.safety = SafetyConfig()
+        # Set default workspace limits if not provided
+        if self.safety.workspace_limits is None:
+            self.safety.workspace_limits = {
+                'left': {'x': (0.0, 0.8), 'y': (-0.5, 0.5), 'z': (0.0, 0.6)},
+                'right': {'x': (0.0, 0.8), 'y': (-0.5, 0.5), 'z': (0.0, 0.6)},
+            }
 

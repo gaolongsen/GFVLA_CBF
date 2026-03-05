@@ -20,7 +20,12 @@ import os
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from hardware import DualArmHardwareInterface, HardwareConfig
+from hardware import (
+    DualArmHardwareInterface,
+    HardwareConfig,
+    obstacles_from_blocks,
+    Obstacle,
+)
 from hardware.vision import BlockDetector, CameraInterface, BlockPose
 
 logging.basicConfig(
@@ -166,6 +171,36 @@ class VLALetterBuilder:
             'L': letter_l,
             'A': letter_a,
         }
+    
+    def _get_obstacles_for_action(
+        self,
+        current_block: BlockPose,
+        other_blocks: List[BlockPose],
+        letter: str,
+        letter_index: int,
+        block_index: int,
+    ) -> Optional[List[Obstacle]]:
+        """
+        Get obstacles for CBF filter: other blocks + already-placed blocks.
+        Excludes the block being picked.
+        """
+        if not self.use_cbf:
+            return None
+        obstacles = []
+        if other_blocks:
+            obstacles.extend(obstacles_from_blocks(other_blocks, safety_margin=0.03))
+        # Already-placed blocks (from letter pattern positions)
+        pattern = self.letter_patterns.get(letter, [])
+        for j in range(min(block_index, len(pattern))):
+            rel_x, rel_y, _ = pattern[j]
+            letter_x = self.letter_start_x + letter_index * self.letter_spacing
+            pos = np.array([
+                letter_x + rel_x,
+                self.letter_start_y + rel_y,
+                self.table_height,
+            ])
+            obstacles.append(Obstacle(position=pos, radius=0.02))
+        return obstacles if obstacles else None
     
     def detect_available_blocks(self, source_region_center: Optional[np.ndarray] = None) -> List[BlockPose]:
         """
@@ -329,6 +364,7 @@ class VLALetterBuilder:
         
         # Build letter with left arm
         for i in range(left_blocks):
+            available_blocks: List[BlockPose] = []
             # Detect available blocks
             if self.use_vision and self.detector is not None:
                 available_blocks = self.detect_available_blocks(source_region_center)
@@ -370,19 +406,23 @@ class VLALetterBuilder:
             pick_approach = self.get_pick_pose(block_pose, approach=True)
             pick_grasp = self.get_pick_pose(block_pose, approach=False)
             
+            # Build obstacles for CBF (other blocks in scene, already-placed blocks)
+            other_blocks = available_blocks[1:] if len(available_blocks) > 1 else []
+            obstacles = self._get_obstacles_for_action(block_pose, other_blocks, letter, letter_index, i)
+            
             # Approach and grasp
             action = np.concatenate([
                 pick_approach, [1.0],  # Left arm approach, gripper open
                 np.zeros(7),  # Right arm stay
             ])
-            self.hardware.execute_action(action, blocking=True)
+            self.hardware.execute_action(action, blocking=True, obstacles=obstacles)
             time.sleep(0.3)
             
             action = np.concatenate([
                 pick_grasp, [0.0],  # Left arm grasp, gripper close
                 np.zeros(7),  # Right arm stay
             ])
-            self.hardware.execute_action(action, blocking=True)
+            self.hardware.execute_action(action, blocking=True, obstacles=obstacles)
             time.sleep(0.3)
             
             # Lift
@@ -390,7 +430,7 @@ class VLALetterBuilder:
                 pick_approach, [0.0],  # Left arm lift, gripper closed
                 np.zeros(7),  # Right arm stay
             ])
-            self.hardware.execute_action(action, blocking=True)
+            self.hardware.execute_action(action, blocking=True, obstacles=obstacles)
             time.sleep(0.3)
             
             # Place block
@@ -401,14 +441,14 @@ class VLALetterBuilder:
                 place_approach, [0.0],  # Left arm approach, gripper closed
                 np.zeros(7),  # Right arm stay
             ])
-            self.hardware.execute_action(action, blocking=True)
+            self.hardware.execute_action(action, blocking=True, obstacles=obstacles)
             time.sleep(0.3)
             
             action = np.concatenate([
                 place_position, [0.0],  # Left arm place, gripper closed
                 np.zeros(7),  # Right arm stay
             ])
-            self.hardware.execute_action(action, blocking=True)
+            self.hardware.execute_action(action, blocking=True, obstacles=obstacles)
             time.sleep(0.2)
             
             # Release
@@ -416,7 +456,7 @@ class VLALetterBuilder:
                 place_position, [1.0],  # Left arm release, gripper open
                 np.zeros(7),  # Right arm stay
             ])
-            self.hardware.execute_action(action, blocking=True)
+            self.hardware.execute_action(action, blocking=True, obstacles=obstacles)
             time.sleep(0.2)
             
             # Retract
@@ -424,12 +464,13 @@ class VLALetterBuilder:
                 place_approach, [1.0],  # Left arm retract, gripper open
                 np.zeros(7),  # Right arm stay
             ])
-            self.hardware.execute_action(action, blocking=True)
+            self.hardware.execute_action(action, blocking=True, obstacles=obstacles)
             time.sleep(0.3)
         
         # Build letter with right arm (if dual-arm mode)
         if right_blocks > 0:
             for i in range(left_blocks, num_blocks):
+                available_blocks = []
                 # Detect available blocks
                 if self.use_vision and self.detector is not None:
                     available_blocks = self.detect_available_blocks(source_region_center)
@@ -471,19 +512,23 @@ class VLALetterBuilder:
                 pick_approach = self.get_pick_pose(block_pose, approach=True)
                 pick_grasp = self.get_pick_pose(block_pose, approach=False)
                 
+                # Build obstacles for CBF
+                other_blocks_right = available_blocks[1:] if len(available_blocks) > 1 else []
+                obstacles_right = self._get_obstacles_for_action(block_pose, other_blocks_right, letter, letter_index, i)
+                
                 # Approach and grasp
                 action = np.concatenate([
                     np.zeros(7),  # Left arm stay
                     pick_approach, [1.0],  # Right arm approach, gripper open
                 ])
-                self.hardware.execute_action(action, blocking=True)
+                self.hardware.execute_action(action, blocking=True, obstacles=obstacles_right)
                 time.sleep(0.3)
                 
                 action = np.concatenate([
                     np.zeros(7),  # Left arm stay
                     pick_grasp, [0.0],  # Right arm grasp, gripper close
                 ])
-                self.hardware.execute_action(action, blocking=True)
+                self.hardware.execute_action(action, blocking=True, obstacles=obstacles_right)
                 time.sleep(0.3)
                 
                 # Lift
@@ -491,7 +536,7 @@ class VLALetterBuilder:
                     np.zeros(7),  # Left arm stay
                     pick_approach, [0.0],  # Right arm lift, gripper closed
                 ])
-                self.hardware.execute_action(action, blocking=True)
+                self.hardware.execute_action(action, blocking=True, obstacles=obstacles_right)
                 time.sleep(0.3)
                 
                 # Place block
@@ -502,14 +547,14 @@ class VLALetterBuilder:
                     np.zeros(7),  # Left arm stay
                     place_approach, [0.0],  # Right arm approach, gripper closed
                 ])
-                self.hardware.execute_action(action, blocking=True)
+                self.hardware.execute_action(action, blocking=True, obstacles=obstacles_right)
                 time.sleep(0.3)
                 
                 action = np.concatenate([
                     np.zeros(7),  # Left arm stay
                     place_position, [0.0],  # Right arm place, gripper closed
                 ])
-                self.hardware.execute_action(action, blocking=True)
+                self.hardware.execute_action(action, blocking=True, obstacles=obstacles_right)
                 time.sleep(0.2)
                 
                 # Release
@@ -517,7 +562,7 @@ class VLALetterBuilder:
                     np.zeros(7),  # Left arm stay
                     place_position, [1.0],  # Right arm release, gripper open
                 ])
-                self.hardware.execute_action(action, blocking=True)
+                self.hardware.execute_action(action, blocking=True, obstacles=obstacles_right)
                 time.sleep(0.2)
                 
                 # Retract
@@ -525,7 +570,7 @@ class VLALetterBuilder:
                     np.zeros(7),  # Left arm stay
                     place_approach, [1.0],  # Right arm retract, gripper open
                 ])
-                self.hardware.execute_action(action, blocking=True)
+                self.hardware.execute_action(action, blocking=True, obstacles=obstacles_right)
                 time.sleep(0.3)
         
         logger.info(f"Letter '{letter}' completed")
@@ -618,6 +663,11 @@ def main():
         action='store_true',
         help='Disable vision-based detection, use fixed positions'
     )
+    parser.add_argument(
+        '--no-cbf',
+        action='store_true',
+        help='Disable Control Barrier Function (CBF) obstacle avoidance filter'
+    )
     
     args = parser.parse_args()
     
@@ -657,6 +707,7 @@ def main():
     config.ur10e.ip_address = args.ur10e_ip
     config.robotiq.port = args.robotiq_port
     config.barrett.ip_address = args.barrett_ip
+    config.safety.use_cbf_filter = not args.no_cbf
     
     # Create hardware interface
     hardware = DualArmHardwareInterface(config)
