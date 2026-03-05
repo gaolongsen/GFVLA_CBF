@@ -1,7 +1,6 @@
 <p align="center">
-  <h1 align="center">GF-VLA</h1>
+  <h1 align="center">Graph-Fused Vision-Language-Action Models for Semantically Safe Dual-Robot Control via Control Barrier Functions</h1>
   <p align="center">
-    <strong>Graph-Fused Vision-Language-Action Models for Semantically Safe Dual-Robot Control via Control Barrier Functions</strong>
   </p>
   <p align="center">
     <a href="#"><img src="https://img.shields.io/badge/Paper-arXiv-red" alt="Paper"></a>
@@ -9,6 +8,7 @@
     <a href="#control-barrier-function-cbf-module"><img src="https://img.shields.io/badge/Safety-CBF-green" alt="CBF"></a>
   </p>
 </p>
+
 
 ---
 
@@ -124,21 +124,6 @@ GFVLA_CBF/
 ├── vla/                # VLA training & datasets
 ├── scripts/            # Training scripts
 └── assets/             # Figures & resources
-```
-
----
-
-## 📜 Citation
-
-If you find this work useful, please cite:
-
-```bibtex
-@article{gfvla2025,
-  title={Graph-Fused Vision-Language-Action Models for Semantically Safe Dual-Robot Control via Control Barrier Functions},
-  author={...},
-  journal={...},
-  year={2025}
-}
 ```
 
 ---
